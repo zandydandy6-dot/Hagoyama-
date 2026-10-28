@@ -1,0 +1,45 @@
+name: Build mod
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Download Forge MDK
+        run: |
+          curl -fL -o mdk.zip https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-mdk.zip
+          mkdir build-mdk
+          unzip -q mdk.zip -d build-mdk
+
+      - name: Add the mod
+        run: |
+          unzip -q src.zip -d mod
+          MAIN=$(find "$PWD/mod" -type d -name main -exec test -d "{}/java" \; -print | head -1)
+          echo "Found main folder: $MAIN"
+          test -n "$MAIN"
+          cd build-mdk
+          rm -rf src/main/java/com/example src/main/resources/META-INF/mods.toml
+          cp -r "$MAIN"/. src/main/
+          find src/main/java -name '*.java' -exec sed -i 's/net\.minecraft\.server\.level\.ServerLevelAccessor/net.minecraft.world.level.ServerLevelAccessor/g' {} +
+
+      - name: Build
+        working-directory: build-mdk
+        run: |
+          chmod +x gradlew
+          ./gradlew build
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-jar
+          path: build-mdk/build/libs/*.jar
